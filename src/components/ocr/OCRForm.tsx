@@ -21,6 +21,7 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
   const [files, setFiles] = useState<File[]>([]);
   const [extractionType, setExtractionType] = useState("all");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [fileProcessingProgress, setFileProcessingProgress] = useState(0);
   const [exportToSheets, setExportToSheets] = useState(false);
 
   // Bulk upload state
@@ -84,14 +85,38 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
     }
 
     setIsProcessing(true);
+    setFileProcessingProgress(0);
 
     try {
-      const results = await ocrService.processFiles({
-        extractionType,
-        files
-      });
+      // Process files one by one to track progress
+      const allResults = [];
 
-      onProcessingComplete(results);
+      for (let i = 0; i < files.length; i++) {
+        // Update progress based on current file index
+        const currentProgress = Math.round(((i) / files.length) * 100);
+        setFileProcessingProgress(currentProgress);
+
+        // Process current file
+        const fileResult = await ocrService.processFiles({
+          extractionType,
+          files: [files[i]]
+        });
+
+        // Add results to the collection
+        if (fileResult && fileResult.length > 0) {
+          allResults.push(...fileResult);
+        }
+
+        // Update progress after file is processed
+        const newProgress = Math.round(((i + 1) / files.length) * 100);
+        setFileProcessingProgress(newProgress);
+      }
+
+      // Complete the progress
+      setFileProcessingProgress(100);
+
+      // Pass all results to parent component
+      onProcessingComplete(allResults);
 
       toast({
         title: "Processing complete",
@@ -99,13 +124,13 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
       });
 
       // Export to Google Sheets if the option is selected
-      if (exportToSheets && results.length > 0) {
+      if (exportToSheets && allResults.length > 0) {
         toast({
           title: "Exporting to Google Sheets",
           description: "This may take a moment..."
         });
 
-        const success = await ocrService.saveToGoogleSheets(results);
+        const success = await ocrService.saveToGoogleSheets(allResults);
 
         if (success) {
           toast({
@@ -123,6 +148,8 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
       });
     } finally {
       setIsProcessing(false);
+      // Reset progress after a short delay to show 100% completion
+      setTimeout(() => setFileProcessingProgress(0), 1000);
     }
   };
 
@@ -241,7 +268,7 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
             variant: "destructive"
           });
         }
-      }, 2000); // Poll every 2 seconds
+      }, 1000); // Poll every 1 second for more responsive updates
 
       setStatusPollingInterval(interval);
 
@@ -305,13 +332,33 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
 
             {/* Extraction Type and Export to Google Sheets removed as requested */}
 
+            {isProcessing && (
+              <div className="space-y-2 mt-4">
+                <div className="flex justify-between text-sm">
+                  <span>Processing files...</span>
+                  <span>{Math.round(fileProcessingProgress)}%</span>
+                </div>
+                <Progress value={fileProcessingProgress} className="h-2 bg-purple-200" />
+                <p className="text-xs text-muted-foreground">
+                  Status: {fileProcessingProgress < 100 ? "Processing" : "Completing..."}
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <Button
                 onClick={processFiles}
                 disabled={files.length === 0 || isProcessing}
                 className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
               >
-                {isProcessing ? "Processing..." : "Process Files"}
+                {isProcessing ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  "Process Files"
+                )}
               </Button>
               <Button
                 variant="outline"
@@ -348,7 +395,7 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
                   <span>Processing files...</span>
                   <span>{bulkUploadJob.processed_files} of {bulkUploadJob.total_files}</span>
                 </div>
-                <Progress value={bulkUploadProgress} className="h-2" />
+                <Progress value={bulkUploadProgress} className="h-2 bg-purple-200" />
                 <p className="text-xs text-muted-foreground">
                   Status: {bulkUploadJob.status}
                 </p>
