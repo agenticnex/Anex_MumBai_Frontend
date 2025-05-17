@@ -31,6 +31,19 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
   const [bulkUploadProgress, setBulkUploadProgress] = useState(0);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
+  // Debug log for progress values
+  useEffect(() => {
+    if (fileProcessingProgress > 0) {
+      console.log(`File processing progress updated: ${fileProcessingProgress}%`);
+    }
+  }, [fileProcessingProgress]);
+
+  useEffect(() => {
+    if (bulkUploadProgress > 0) {
+      console.log(`Bulk upload progress updated: ${bulkUploadProgress}%`);
+    }
+  }, [bulkUploadProgress]);
+
   // Status polling interval
   const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
@@ -91,10 +104,22 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
       // Process files one by one to track progress
       const allResults = [];
 
+      // Set initial progress
+      setFileProcessingProgress(5);
+
+      // Simulate initial progress to show movement
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setFileProcessingProgress(10);
+
       for (let i = 0; i < files.length; i++) {
-        // Update progress based on current file index
-        const currentProgress = Math.round(((i) / files.length) * 100);
-        setFileProcessingProgress(currentProgress);
+        // Calculate progress - start at 10% and go to 90% during processing
+        // This leaves room for initial and final animations
+        const progressPerFile = 80 / files.length;
+        const startProgress = 10 + (i * progressPerFile);
+
+        // Set progress at the start of processing this file
+        setFileProcessingProgress(Math.round(startProgress));
+        console.log(`Starting to process file ${i+1}/${files.length}, progress: ${Math.round(startProgress)}%`);
 
         // Process current file
         const fileResult = await ocrService.processFiles({
@@ -108,11 +133,17 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
         }
 
         // Update progress after file is processed
-        const newProgress = Math.round(((i + 1) / files.length) * 100);
-        setFileProcessingProgress(newProgress);
+        const endProgress = 10 + ((i + 1) * progressPerFile);
+        setFileProcessingProgress(Math.round(endProgress));
+        console.log(`Finished processing file ${i+1}/${files.length}, progress: ${Math.round(endProgress)}%`);
+
+        // Small delay to make progress visible
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      // Complete the progress
+      // Complete the progress with animation
+      setFileProcessingProgress(95);
+      await new Promise(resolve => setTimeout(resolve, 300));
       setFileProcessingProgress(100);
 
       // Pass all results to parent component
@@ -212,6 +243,9 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
     setIsBulkProcessing(true);
     setBulkUploadProgress(0);
 
+    // Set initial progress to show movement
+    setTimeout(() => setBulkUploadProgress(5), 300);
+
     try {
       // Start bulk upload job
       const job = await ocrService.processFolderFiles({
@@ -227,10 +261,15 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
           const status = await ocrService.checkBulkUploadStatus(job.job_id);
           setBulkUploadJob(status);
 
-          // Calculate progress
-          const progress = status.total_files > 0
-            ? Math.round((status.processed_files / status.total_files) * 100)
-            : 0;
+          // Calculate progress - scale from 5% to 95% to show movement
+          let progress = 5; // Start at 5%
+
+          if (status.total_files > 0) {
+            // Scale from 5% to 95% based on processed files
+            progress = 5 + Math.round((status.processed_files / status.total_files) * 90);
+          }
+
+          console.log(`Bulk upload progress: ${progress}%, Processed: ${status.processed_files}/${status.total_files}`);
           setBulkUploadProgress(progress);
 
           // If completed or failed, stop polling
@@ -241,6 +280,9 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
 
             // If completed, notify user and update results
             if (status.status === 'completed' && status.results) {
+              // Set progress to 100% for completion
+              setBulkUploadProgress(100);
+
               toast({
                 title: "Bulk processing complete",
                 description: `Successfully processed ${status.processed_files} files`,
@@ -338,9 +380,9 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
                   <span>Processing files...</span>
                   <span>{Math.round(fileProcessingProgress)}%</span>
                 </div>
-                <Progress value={fileProcessingProgress} className="h-2 bg-purple-200" />
+                <Progress value={fileProcessingProgress} className="h-3 bg-purple-100" />
                 <p className="text-xs text-muted-foreground">
-                  Status: {fileProcessingProgress < 100 ? "Processing" : "Completing..."}
+                  Status: {fileProcessingProgress < 100 ? "Processing" : "Completing..."} (Progress value: {fileProcessingProgress})
                 </p>
               </div>
             )}
@@ -395,9 +437,9 @@ export const OCRForm = ({ onProcessingComplete, processedFiles }: OCRFormProps) 
                   <span>Processing files...</span>
                   <span>{bulkUploadJob.processed_files} of {bulkUploadJob.total_files}</span>
                 </div>
-                <Progress value={bulkUploadProgress} className="h-2 bg-purple-200" />
+                <Progress value={bulkUploadProgress} className="h-3 bg-purple-100" />
                 <p className="text-xs text-muted-foreground">
-                  Status: {bulkUploadJob.status}
+                  Status: {bulkUploadJob.status} (Progress value: {bulkUploadProgress})
                 </p>
               </div>
             )}
