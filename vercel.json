@@ -5,5 +5,8 @@
   "installCommand": "npm install",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
-  ]
+  ],
+  "env": {
+    "VITE_API_URL": "https://anex-mumbai-backend.onrender.com/api"
+  }
 }
