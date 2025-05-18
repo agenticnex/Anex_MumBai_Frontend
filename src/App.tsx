@@ -46,10 +46,21 @@ const AuthCallback = () => {
 
         if (hashParams.get("access_token")) {
           // Let Supabase handle the session with the hash values
-          const { error } = await supabase.auth.getSession();
+          const { data, error } = await supabase.auth.getSession();
 
           if (error) {
             console.error("Error processing auth callback:", error.message);
+            navigate("/auth");
+            return;
+          }
+
+          // Get user data from the session
+          const session = data.session;
+          if (session?.user) {
+            console.log("User authenticated successfully:", session.user.email);
+
+            // User profile data is saved in the AuthProvider component
+            // when the auth state changes to SIGNED_IN
           }
         }
 

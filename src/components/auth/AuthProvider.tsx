@@ -4,6 +4,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
+import axios from "axios";
 
 interface AuthContextType {
   user: User | null;
@@ -27,17 +28,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // Function to save user profile to backend
+  const saveUserProfile = async (user: User) => {
+    try {
+      // Get API URL from environment or use default
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://anex-mumbai-backend.onrender.com/api';
+
+      // Extract user data
+      const userData = {
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+        avatar_url: user.user_metadata?.avatar_url || ''
+      };
+
+      // Save to backend
+      await axios.post(`${apiUrl}/user-profile`, userData);
+      console.log('User profile saved successfully');
+    } catch (error) {
+      console.error('Error saving user profile:', error);
+      // Don't throw - we don't want to interrupt the auth flow
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log("Auth state changed:", event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
 
         if (event === 'SIGNED_OUT') {
           navigate('/auth');
-        } else if (event === 'SIGNED_IN' && session) {
+        } else if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+          // Save user profile data to our backend
+          await saveUserProfile(session.user);
+
           // Navigate to home page (Web Scraper)
           navigate('/');
         }
@@ -45,9 +72,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+
+      // If we have a session, save the user profile
+      if (session?.user) {
+        await saveUserProfile(session.user);
+      }
+
       setLoading(false);
     });
 
