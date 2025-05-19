@@ -7,6 +7,7 @@
     { "source": "/(.*)", "destination": "/" }
   ],
   "env": {
-    "VITE_API_URL": "https://anex-mumbai-backend.onrender.com/api"
+    "VITE_API_URL": "https://anex-mumbai-backend.onrender.com/api",
+    "VITE_SITE_URL": "https://anex-mum-bai-frontend.vercel.app"
   }
 }
